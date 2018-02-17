@@ -120,7 +120,7 @@ proc existsEnv*(key: string): bool {.tags: [ReadEnvEffect].} =
     if c_getenv(key) != nil: return true
     else: return findEnvVar(key) >= 0
 
-proc putEnv*(key, val: string) {.tags: [WriteEnvEffect].} =
+proc putEnv*(key, val: string) {.tags: [WriteEnvEffect, ReadIOEffect].} =
   ## Sets the value of the `environment variable`:idx: named `key` to `val`.
   ## If an error occurs, `EInvalidEnvVar` is raised.
 

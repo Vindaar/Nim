@@ -230,7 +230,7 @@ proc fileNewer*(a, b: string): bool {.rtl, extern: "nos$1".} =
   else:
     result = getLastModificationTime(a) - getLastModificationTime(b) > 0
 
-proc getCurrentDir*(): string {.rtl, extern: "nos$1", tags: [].} =
+proc getCurrentDir*(): string {.rtl, extern: "nos$1", tags: [ReadIOEffect].} =
   ## Returns the `current working directory`:idx:.
   when defined(windows):
     var bufsize = MAX_PATH.int32
@@ -274,7 +274,7 @@ proc getCurrentDir*(): string {.rtl, extern: "nos$1", tags: [].} =
         else:
           raiseOSError(osLastError())
 
-proc setCurrentDir*(newDir: string) {.inline, tags: [].} =
+proc setCurrentDir*(newDir: string) {.inline, tags: [ReadIOEffect, WriteIOEffect].} =
   ## Sets the `current working directory`:idx:; `OSError` is raised if
   ## `newDir` cannot been set.
   when defined(Windows):
