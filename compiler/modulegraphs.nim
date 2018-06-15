@@ -71,6 +71,9 @@ proc stopCompile*(g: ModuleGraph): bool {.inline.} =
   result = doStopCompile != nil and doStopCompile()
 
 proc createMagic*(g: ModuleGraph; name: string, m: TMagic): PSym =
+  if m == mExpandToAst:
+    echo name
+    echo "\n"
   result = newSym(skProc, getIdent(g.cache, name), nil, unknownLineInfo(), {})
   result.magic = m
 

@@ -511,6 +511,7 @@ proc getRoot*(n: PNode): PSym =
   else: discard
 
 proc newIntLit*(g: ModuleGraph; info: TLineInfo; value: BiggestInt): PNode =
+  echo "Being called! ", value
   result = nkIntLit.newIntNode(value)
   result.typ = getSysType(g, info, tyInt)
 

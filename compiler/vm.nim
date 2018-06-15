@@ -182,7 +182,11 @@ proc copyValue(src: PNode): PNode =
     if result.id == nodeIdToDebug:
       echo "COMES FROM ", src.id
   case src.kind
-  of nkCharLit..nkUInt64Lit: result.intVal = src.intVal
+  of nkCharLit..nkUInt64Lit:
+    echo "Found a kind ", src.kind
+    result.intVal = src.intVal
+    if src.kind == nkUInt8Lit:
+      quit()
   of nkFloatLit..nkFloat128Lit: result.floatVal = src.floatVal
   of nkSym: result.sym = src.sym
   of nkIdent: result.ident = src.ident
@@ -373,6 +377,10 @@ proc opConv(c: PCtx; dest: var TFullReg, src: TFullReg, desttyp, srctyp: PType):
       if dest.intVal < firstOrd(c.config, desttyp) or dest.intVal > lastOrd(c.config, desttyp):
         return true
     of tyUInt..tyUInt64:
+      echo "Desttype is  ", desttyp, " and src typ ", srctyp
+      echo "src ", src
+      echo "dest ", dest
+      echo "val ", dest.intVal
       if dest.kind != rkInt:
         myreset(dest); dest.kind = rkInt
       case skipTypes(srctyp, abstractRange).kind
@@ -387,6 +395,9 @@ proc opConv(c: PCtx; dest: var TFullReg, src: TFullReg, desttyp, srctyp: PType):
         else:
           dest.intVal = (src.intVal shl srcDist) shr srcDist
           dest.intVal = (dest.intVal shl destDist) shr destDist
+
+        echo "val now ", dest.intVal
+        writeStackTrace()
     of tyFloat..tyFloat64:
       if dest.kind != rkFloat:
         myreset(dest); dest.kind = rkFloat
@@ -460,12 +471,13 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
   while true:
     #{.computedGoto.}
     let instr = c.code[pc]
+    let cod = opcode(instr)
+    #debugecho "instr ", cod
     let ra = instr.regA
     #if c.traceActive:
     when traceCode:
       echo "PC ", pc, " ", c.code[pc].opcode, " ra ", ra, " rb ", instr.regB, " rc ", instr.regC
     #  message(c.config, c.debug[pc], warnUser, "Trace")
-
     case instr.opcode
     of opcEof: return regs[ra]
     of opcRet:
@@ -642,6 +654,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       decodeBImm(rkInt)
       #message(c.config, c.debug[pc], warnUser, "came here")
       #debug regs[rb].node
+      #echo "Value is ", regs[rb].intVal
+      #echo "Imm is ", imm
       let
         bVal = regs[rb].intVal
         cVal = imm
@@ -898,8 +912,22 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       regs[ra].node.strVal.add(regs[rb].node.strVal)
     of opcAddSeqElem:
       decodeB(rkNode)
+      echo "Adding to bracket ? ", regs[ra].node.kind
+      echo "Adding to bracket ? ", regs[ra].node #.kind      
+      if regs[ra].node.len > 0:
+        echo "First element is ", regs[ra].node[0]
+        echo "type ", regs[ra].node[0].kind
+        echo "rb to node ", regs[rb].regToNode
+        let desttyp = c.types # [c.code[pc].regBx - wordExcess]
+        echo "Dest type now ", desttyp
       if regs[ra].node.kind == nkBracket:
+        echo "Kind of value is ", regs[rb].regToNode.kind
+        echo "Word excess ", instr.regBx - wordExcess
+        echo "regBx ", instr.regBx
         regs[ra].node.add(copyValue(regs[rb].regToNode))
+        echo "node is ", regs[ra].node[0]
+        echo "node b is ", regs[rb].regToNode
+        # regs[ra].node[^1].kind = newNodeI(c.types[4].kind, regs[ra].node.info) #nkUInt8Lit
       else:
         stackTrace(c, tos, pc, errNilAccess)
     of opcGetImpl:
@@ -1809,6 +1837,7 @@ proc evalConstExprAux(module: PSym;
   #for i in 0 ..< c.prc.maxSlots: tos.slots[i] = newNode(nkEmpty)
   result = rawExecute(c, start, tos).regToNode
   if result.info.col < 0: result.info = n.info
+    
 
 proc evalConstExpr*(module: PSym; g: ModuleGraph; e: PNode): PNode =
   result = evalConstExprAux(module, g, nil, e, emConst)
@@ -1902,7 +1931,13 @@ proc evalMacroCall*(module: PSym; g: ModuleGraph;
       globalError(c.config, n.info, "static[T] or typedesc nor supported for .immediate macros")
   # temporary storage:
   #for i in L ..< maxSlots: tos.slots[i] = newNode(nkEmpty)
+  echo "Calling ", n, " for ", sym.name.s
+  echo "Expanding proc ", n.sons[0].sym.getBody
+  echo "start ", start
+  #echo "c ", c.currentScope.symbols.data[0].name.s
+  echo "c call ", c.callsite
   result = rawExecute(c, start, tos).regToNode
+  echo "execute result is ", result
   if result.info.line < 0: result.info = n.info
   if cyclicTree(result): globalError(c.config, n.info, "macro produced a cyclic tree")
   dec(g.config.evalMacroCounter)

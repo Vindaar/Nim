@@ -560,6 +560,7 @@ proc newLit*(c: char): NimNode {.compileTime.} =
 
 proc newLit*(i: int): NimNode {.compileTime.} =
   ## produces a new integer literal node.
+  echo "Is being called ! ", i
   result = newNimNode(nnkIntLit)
   result.intVal = i
 
@@ -590,6 +591,7 @@ proc newLit*(i: uint): NimNode {.compileTime.} =
 
 proc newLit*(i: uint8): NimNode {.compileTime.} =
   ## produces a new unsigned integer literal node.
+  echo "Is being called ! ", i
   result = newNimNode(nnkUInt8Lit)
   result.intVal = BiggestInt(i)
 

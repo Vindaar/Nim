@@ -278,12 +278,22 @@ proc hasCycle(n: PNode): bool =
 proc fixupTypeAfterEval(c: PContext, evaluated, eOrig: PNode): PNode =
   # recompute the types as 'eval' isn't guaranteed to construct types nor
   # that the types are sound:
+  echo "\n\n\nThis is called!"
+  echo "Nodes are ", evaluated
+  echo "And ", eOrig
+  echo "And ", eOrig#.info  
+  writeStackTrace()
+  echo "orig type ", eOrig.typ.kind
+  
   when true:
     if eOrig.typ.kind in {tyExpr, tyStmt, tyTypeDesc}:
       result = semExprWithType(c, evaluated)
     else:
       result = evaluated
       let expectedType = eOrig.typ.skipTypes({tyStatic})
+      echo "expected type  ", expectedType
+      echo "Result type ", evaluated.typ#.kind
+
       if hasCycle(result):
         globalError(c.config, eOrig.info, "the resulting AST is cyclic and cannot be processed further")
         result = errorNode(c, eOrig)
@@ -300,6 +310,7 @@ proc fixupTypeAfterEval(c: PContext, evaluated, eOrig: PNode): PNode =
       if eOrig.typ.skipTypes(abstractInst).kind == tySequence and
          isArrayConstr(arg):
         arg.typ = eOrig.typ
+    echo "Never happens ", quit()
 
 proc tryConstExpr(c: PContext, n: PNode): PNode =
   var e = semExprWithType(c, n)
@@ -388,6 +399,12 @@ proc semAfterMacroCall(c: PContext, call, macroResult: PNode,
     globalError(c.config, s.info, "template instantiation too nested")
   c.friendModules.add(s.owner.getModule)
 
+  if "foo" in $call:
+    echo "macro result ", macroResult
+    echo "type ", s.typ.sons[0].kind
+    echo "result ", macroResult.kind
+    #quit()
+
   result = macroResult
   excl(result.flags, nfSem)
   #resetSemFlag n
@@ -400,6 +417,8 @@ proc semAfterMacroCall(c: PContext, call, macroResult: PNode,
       # work then (see the ``tmodulealias`` test)
       # semExprWithType(c, result)
       result = semExpr(c, result, flags)
+      if "foo" in $call:
+        echo result.sons[0].kind
     of tyStmt:
       result = semStmt(c, result)
     of tyTypeDesc:
@@ -449,7 +468,11 @@ proc semMacroExpr(c: PContext, n, nOrig: PNode, sym: PSym,
   #if c.evalContext == nil:
   #  c.evalContext = c.createEvalContext(emStatic)
   result = evalMacroCall(c.module, c.graph, n, nOrig, sym)
+  if "foo" in $n:
+    echo "macro result ", n
+    echo "flags are ", flags
   if efNoSemCheck notin flags:
+    echo "After macro call"
     result = semAfterMacroCall(c, n, result, sym, flags)
   result = wrapInComesFrom(nOrig.info, sym, result)
   popInfoContext(c.config)

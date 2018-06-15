@@ -690,7 +690,54 @@ template styledEchoProcessArg(f: File, cmd: TerminalCmd) =
   when cmd == bgColor:
     fgSetColor = false
 
-macro styledWriteLine*(f: File, m: varargs[typed]): untyped =
+macro styledWrite*(f: File, m: varargs[typed]): untyped =
+  ## Similar to ``write``, but treating terminal style arguments specially.
+  ## When some argument is ``Style``, ``set[Style]``, ``ForegroundColor``,
+  ## ``BackgroundColor`` or ``TerminalCmd`` then it is not sent directly to
+  ## ``f``, but instead corresponding terminal style proc is called.
+  ##
+  ## Example:
+  ##
+  ## .. code-block:: nim
+  ##
+  ##   proc error(msg: string) =
+  ##     styledWrite(stdout, fgRed, "red text", fgGreen, "green text")
+  ##
+  let m = callsite()
+  var reset = false
+  result = newNimNode(nnkStmtList)
+
+  for i in countup(2, m.len - 1):
+    let item = m[i]
+    case item.kind
+    of nnkStrLit..nnkTripleStrLit:
+      if i == m.len - 1:
+        # optimize if string literal is last, just call write
+        result.add(newCall(bindSym"write", f, item))
+        if reset: result.add(newCall(bindSym"resetAttributes", f))
+        return
+      else:
+        # if it is string literal just call write, do not enable reset
+        result.add(newCall(bindSym"write", f, item))
+    else:
+      result.add(newCall(bindSym"styledEchoProcessArg", f, item))
+      reset = true
+  if reset: result.add(newCall(bindSym"resetAttributes", f))
+
+macro styledWriteLine*(f: File, args: varargs[typed]): untyped =
+  # result should be a statement list
+  result = newStmtList()
+  # create new call with `f` as first argument
+  result.add newCall(bindSym"styledWrite", f) 
+  for arg in children(args):
+    # append all arguments to the `nnkCall` node
+    result.add(arg)
+
+  result.add(newCall(bindSym"write", f, newStrLitNode("\n")))
+  echo result.treeRepr
+  
+
+macro styledWriteLineAlt*(f: File, m: varargs[typed]): untyped =
   ## Similar to ``writeLine``, but treating terminal style arguments specially.
   ## When some argument is ``Style``, ``set[Style]``, ``ForegroundColor``,
   ## ``BackgroundColor`` or ``TerminalCmd`` then it is not sent directly to
@@ -715,6 +762,7 @@ macro styledWriteLine*(f: File, m: varargs[typed]): untyped =
         # optimize if string literal is last, just call writeLine
         result.add(newCall(bindSym"writeLine", f, item))
         if reset: result.add(newCall(bindSym"resetAttributes", f))
+        echo "hewewewe ", result.treeRepr        
         return
       else:
         # if it is string literal just call write, do not enable reset
@@ -725,6 +773,7 @@ macro styledWriteLine*(f: File, m: varargs[typed]): untyped =
 
   result.add(newCall(bindSym"write", f, newStrLitNode("\n")))
   if reset: result.add(newCall(bindSym"resetAttributes", f))
+  echo "hewewewe ", result.treeRepr
 
 macro styledEcho*(args: varargs[untyped]): untyped =
   ## Echoes styles arguments to stdout using ``styledWriteLine``.

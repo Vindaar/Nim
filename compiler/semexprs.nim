@@ -706,6 +706,9 @@ proc afterCallActions(c: PContext; n, orig: PNode, flags: TExprFlags): PNode =
       result = magicsAfterOverloadResolution(c, result, flags)
     if result.typ != nil: liftTypeBoundOps(c, result.typ, n.info)
     #result = patchResolvedTypeBoundOp(c, result)
+  if "foo" in $n:
+    echo "c matched ", c.matchedConcept.isNil
+    echo "result ", result
   if c.matchedConcept == nil:
     result = evalAtCompileTime(c, result)
 
@@ -1729,6 +1732,13 @@ proc processQuotations(c: PContext; n: var PNode, op: string,
     processQuotations(c, n.sons[i], op, quotes, ids)
 
 proc semQuoteAst(c: PContext, n: PNode): PNode =
+  echo "Node is ", $n
+  echo "Node kind is ", n.sons[1].sons[0].kind
+  echo "Node kind is ", n.sons[1].sons[0].sons[0].kind  
+  let ris = n.sons[1].sons[0].sons[0]
+  echo ris
+  echo ris.typ#.kind
+  
   internalAssert c.config, n.len == 2 or n.len == 3
   # We transform the do block into a template with a param for
   # each interpolation. We'll pass this template to getAst.
@@ -1745,6 +1755,9 @@ proc semQuoteAst(c: PContext, n: PNode): PNode =
     localError(c.config, n.info, errXExpected, "block")
 
   processQuotations(c, quotedBlock, op, quotes, ids)
+  echo "Block is ", quotedBlock
+  echo quotedBlock.sons[0]
+  echo quotedBlock.kind  
 
   var dummyTemplate = newProcNode(
     nkTemplateDef, quotedBlock.info, body = quotedBlock,
@@ -1752,6 +1765,9 @@ proc semQuoteAst(c: PContext, n: PNode): PNode =
     name = newAnonSym(c, skTemplate, n.info).newSymNode,
               pattern = c.graph.emptyNode, genericParams = c.graph.emptyNode,
               pragmas = c.graph.emptyNode, exceptions = c.graph.emptyNode)
+
+  echo "Template is ", dummyTemplate
+  echo dummyTemplate.kind
 
   if ids.len > 0:
     dummyTemplate.sons[paramsPos] = newNodeI(nkFormalParams, n.info)
@@ -1761,11 +1777,18 @@ proc semQuoteAst(c: PContext, n: PNode): PNode =
     dummyTemplate[paramsPos].add newNode(nkIdentDefs, n.info, ids)
 
   var tmpl = semTemplateDef(c, dummyTemplate)
+  echo "Tmpl is ", tmpl
   quotes[0] = tmpl[namePos]
+  echo "Quotes are ", quotes
+  echo "Quote body ", quotes[0].sym.getBody
+  echo "Quote 1 kind ", quotes[1].kind
+  echo "Hm"
   result = newNode(nkCall, n.info, @[
      createMagic(c.graph, "getAst", mExpandToAst).newSymNode,
     newNode(nkCall, n.info, quotes)])
   result = semExpandToAst(c, result)
+  writeStackTrace()
+  #echo c.graph.
 
 proc tryExpr(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
   # watch out, hacks ahead:
@@ -2226,6 +2249,7 @@ proc shouldBeBracketExpr(n: PNode): bool =
           return true
 
 proc semExpr(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
+
   result = n
   if c.config.cmd == cmdIdeTools: suggestExpr(c, n)
   if nfSem in n.flags: return
@@ -2395,7 +2419,11 @@ proc semExpr(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
     of paTupleFields: result = semTupleFieldsConstr(c, n, flags)
     of paSingle: result = semExpr(c, n.sons[0], flags)
   of nkCurly: result = semSetConstr(c, n)
-  of nkBracket: result = semArrayConstr(c, n, flags)
+  of nkBracket: 
+    echo "Bracket call!"
+    result = semArrayConstr(c, n, flags)
+    echo "n ", n
+    echo "result ", result
   of nkObjConstr: result = semObjConstr(c, n, flags)
   of nkLambdaKinds: result = semLambda(c, n, flags)
   of nkDerefExpr: result = semDeref(c, n)
